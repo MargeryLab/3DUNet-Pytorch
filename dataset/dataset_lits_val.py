@@ -17,6 +17,15 @@ class Val_Dataset(dataset):
 
         self.transforms = Compose([Center_Crop(base=16, max_size=args.val_crop_max_size)]) 
 
+    def znorm(self, data):
+        data = data.astype(np.float64)
+        mean, std = data.mean(), data.std()
+        if std == 0:
+            return None
+        data -= mean
+        data /= std
+        return data
+
     def __getitem__(self, index):
 
         ct = sitk.ReadImage(self.filename_list[index][0], sitk.sitkInt16)
@@ -25,10 +34,12 @@ class Val_Dataset(dataset):
         ct_array = sitk.GetArrayFromImage(ct)
         seg_array = sitk.GetArrayFromImage(seg)
 
-        ct_array = ct_array / self.args.norm_factor
+        # ct_array = ct_array / self.args.norm_factor
+        # ct_array = self.znorm(ct_array)
+        ct_array = (ct_array - np.min(ct_array)) / (np.max(ct_array) - np.min(ct_array))
         ct_array = ct_array.astype(np.float32)
 
-        ct_array = torch.FloatTensor(ct_array).unsqueeze(0)
+        ct_array = torch.FloatTensor(ct_array).unsqueeze(0)#torch.Size([1, 34, 320, 320])
         seg_array = torch.FloatTensor(seg_array).unsqueeze(0)
 
         if self.transforms:

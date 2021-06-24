@@ -10,36 +10,38 @@ import numpy as np
 from models import ResUNet
 from utils.metrics import DiceAverage
 from collections import OrderedDict
+from dataset.dataset_lits_val import Val_Dataset
 
 
 def predict_one_img(model, img_dataset, args):
     dataloader = DataLoader(dataset=img_dataset, batch_size=1, num_workers=0, shuffle=False)
     model.eval()
     test_dice = DiceAverage(args.n_labels)
-    target = to_one_hot_3d(img_dataset.label, args.n_labels)
+    target = to_one_hot_3d(img_dataset.label, args.n_labels)    #torch.Size([1, 95, 256, 256])
     
     with torch.no_grad():
         for data in tqdm(dataloader,total=len(dataloader)):
-            data = data.to(device)
-            output = model(data)
+            data = data.to(device)  #torch.Size([1, 1, 48, 128, 128])
+            output = model(data)#torch.Size([1, 3, 48, 128, 128])
             # output = nn.functional.interpolate(output, scale_factor=(1//args.slice_down_scale,1//args.xy_down_scale,1//args.xy_down_scale), mode='trilinear', align_corners=False) # 空间分辨率恢复到原始size
             img_dataset.update_result(output.detach().cpu())
 
-    pred = img_dataset.recompone_result()
-    pred = torch.argmax(pred,dim=1)
+    pred = img_dataset.recompone_result()#torch.Size([1, 3, 95, 256, 256])
+    pred = torch.argmax(pred,dim=1)#torch.Size([1, 95, 256, 256])
 
     pred_img = common.to_one_hot_3d(pred,args.n_labels)
     test_dice.update(pred_img, target)
     
-    test_dice = OrderedDict({'Dice_liver': test_dice.avg[1]})
-    if args.n_labels==3: test_dice.update({'Dice_tumor': test_dice.avg[2]})
+    test_dice_res = OrderedDict({'Dice_tumor': test_dice.avg[1]})
+    if args.n_labels==3: test_dice_res.update({'Dice_rectal': test_dice.avg[2]})
     
     pred = np.asarray(pred.numpy(),dtype='uint8')
     if args.postprocess:
         pass # TO DO
     pred = sitk.GetImageFromArray(np.squeeze(pred,axis=0))
 
-    return test_dice, pred
+    return test_dice_res, pred
+
 
 if __name__ == '__main__':
     args = config.args
@@ -56,9 +58,9 @@ if __name__ == '__main__':
     result_save_path = '{}/result'.format(save_path)
     if not os.path.exists(result_save_path):
         os.mkdir(result_save_path)
-    
-    datasets = Test_Datasets(args.test_data_path,args=args)
+
+    datasets = Test_Datasets(args=args)
     for img_dataset,file_idx in datasets:
         test_dice,pred_img = predict_one_img(model, img_dataset, args)
         test_log.update(file_idx, test_dice)
-        sitk.WriteImage(pred_img, os.path.join(result_save_path, 'result-'+file_idx+'.gz'))
+        sitk.WriteImage(pred_img, os.path.join(result_save_path, 'result-'+file_idx))

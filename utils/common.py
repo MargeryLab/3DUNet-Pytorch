@@ -4,9 +4,9 @@ from scipy import ndimage
 import torch, random
 
 # target one-hot编码
-def to_one_hot_3d(tensor, n_classes=3):  # shape = [batch, s, h, w]
+def to_one_hot_3d(tensor, n_classes=3):  # shape = [batch, s, h, w] [1, 95, 256, 256]
     n, s, h, w = tensor.size()
-    one_hot = torch.zeros(n, n_classes, s, h, w).scatter_(1, tensor.view(n, 1, s, h, w), 1)
+    one_hot = torch.zeros(n, n_classes, s, h, w).scatter_(1, tensor.view(n, 1, s, h, w), 1)#[1, 3, 95, 256, 256]
     return one_hot
 
 def random_crop_3d(img, label, crop_size):
@@ -57,7 +57,7 @@ def print_network(net):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 20))
+    lr = args.lr * (0.1 ** (epoch // 10))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

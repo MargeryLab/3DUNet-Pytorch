@@ -37,6 +37,11 @@ class Train_Logger():
         for key,value in item.items():
             if key != 'epoch': self.summary.add_scalar(key, value, epoch)
 
+    def vis_image(self,image_name,img,epoch):
+        if self.summary is None:
+            self.summary = SummaryWriter('%s/' % self.save_path)
+        self.summary.add_images(image_name, img, epoch)
+
 class Test_Logger():
     def __init__(self,save_path,save_name):
         self.log = None

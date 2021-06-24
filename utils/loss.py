@@ -15,7 +15,7 @@ class DiceLoss(nn.Module):
 
         # pred = pred.squeeze(dim=1)
 
-        smooth = 1
+        smooth = 1e-8
 
         dice = 0.
         # dice系数的定义
@@ -65,6 +65,7 @@ class HybridLoss(nn.Module):
         dice = dice / pred.size(1)
 
         # 返回的是dice距离 +　二值化交叉熵损失
+        # return torch.clamp((1 - dice).mean(), 0, 1) + self.bce_loss(pred, target) * self.bce_weight
         return torch.clamp((1 - dice).mean(), 0, 1) + self.bce_loss(pred, target) * self.bce_weight
 
 
@@ -113,13 +114,13 @@ class TverskyLoss(nn.Module):
 
     def forward(self, pred, target):
 
-        smooth = 1
+        smooth = 1e-8
 
-        dice = 0.
+        tversky = 0.
 
         for i in range(pred.size(1)):
-            dice += (pred[:,i] * target[:,i]).sum(dim=1).sum(dim=1).sum(dim=1) / ((pred[:,i] * target[:,i]).sum(dim=1).sum(dim=1).sum(dim=1)+
+            tversky += (pred[:,i] * target[:,i]).sum(dim=1).sum(dim=1).sum(dim=1) / ((pred[:,i] * target[:,i]).sum(dim=1).sum(dim=1).sum(dim=1)+
                         0.3 * (pred[:,i] * (1 - target[:,i])).sum(dim=1).sum(dim=1).sum(dim=1) + 0.7 * ((1 - pred[:,i]) * target[:,i]).sum(dim=1).sum(dim=1).sum(dim=1) + smooth)
 
-        dice = dice / pred.size(1)
-        return torch.clamp((1 - dice).mean(), 0, 2)
+        tversky = tversky / pred.size(1)
+        return torch.clamp((1 - tversky).mean(), 0, 2)

@@ -134,21 +134,21 @@ class ResUNet(nn.Module):
         # 最后大尺度下的映射（256*256），下面的尺度依次递减
         self.map4 = nn.Sequential(
             nn.Conv3d(32, out_channel, 1, 1),
-            nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False),
+            # nn.Upsample(scale_factor=(1, 1, 1), mode='trilinear', align_corners=False),
             nn.Softmax(dim=1)
         )
 
         # 128*128 尺度下的映射
         self.map3 = nn.Sequential(
             nn.Conv3d(64, out_channel, 1, 1),
-            nn.Upsample(scale_factor=(2, 4, 4), mode='trilinear', align_corners=False),
+            nn.Upsample(scale_factor=(2, 2, 2), mode='trilinear', align_corners=False),
             nn.Softmax(dim=1)
         )
 
         # 64*64 尺度下的映射
         self.map2 = nn.Sequential(
             nn.Conv3d(128, out_channel, 1, 1),
-            nn.Upsample(scale_factor=(4, 8, 8), mode='trilinear', align_corners=False),
+            nn.Upsample(scale_factor=(4, 4, 4), mode='trilinear', align_corners=False),
 
             nn.Softmax(dim=1)
         )
@@ -156,44 +156,46 @@ class ResUNet(nn.Module):
         # 32*32 尺度下的映射
         self.map1 = nn.Sequential(
             nn.Conv3d(256, out_channel, 1, 1),
-            nn.Upsample(scale_factor=(8, 16, 16), mode='trilinear', align_corners=False),
+            nn.Upsample(scale_factor=(8, 8, 8), mode='trilinear', align_corners=False),
             nn.Softmax(dim=1)
         )
 
-    def forward(self, inputs):
+    def forward(self, inputs):  #（1，1，48，160，205）
+        # if inputs.shape[3] != inputs.shape[4]:
+        #     resize_conv = nn.Upsample(size=(inputs.shape[2], inputs.shape[3],inputs.shape[4]), mode='trilinear', align_corners=False)
+        #     inputs = resize_conv(inputs)
+        long_range1 = self.encoder_stage1(inputs) + inputs  #（1，16，48，160，205）torch.Size([1, 1, 48, 256, 256])
 
-        long_range1 = self.encoder_stage1(inputs) + inputs
+        short_range1 = self.down_conv1(long_range1) #(1,32,24,80,102) torch.Size([1, 32, 24, 128, 128])
 
-        short_range1 = self.down_conv1(long_range1)
-
-        long_range2 = self.encoder_stage2(short_range1) + short_range1
+        long_range2 = self.encoder_stage2(short_range1) + short_range1 #(1,32,24,80,102) torch.Size([1, 32, 24, 128, 128])
         long_range2 = F.dropout(long_range2, self.dorp_rate, self.training)
 
-        short_range2 = self.down_conv2(long_range2)
+        short_range2 = self.down_conv2(long_range2) #(1,64,12,40,51) torch.Size([1, 64, 12, 64, 64])
 
-        long_range3 = self.encoder_stage3(short_range2) + short_range2
+        long_range3 = self.encoder_stage3(short_range2) + short_range2 #(1,64,12,40,51) torch.Size([1, 64, 12, 64, 64])
         long_range3 = F.dropout(long_range3, self.dorp_rate, self.training)
 
-        short_range3 = self.down_conv3(long_range3)
+        short_range3 = self.down_conv3(long_range3) #（1，128，6，20，25） torch.Size([1, 128, 6, 32, 32])
 
-        long_range4 = self.encoder_stage4(short_range3) + short_range3
-        long_range4 = F.dropout(long_range4, self.dorp_rate, self.training)
+        long_range4 = self.encoder_stage4(short_range3) + short_range3  #torch.Size([1, 128, 6, 32, 32])
+        long_range4 = F.dropout(long_range4, self.dorp_rate, self.training) #（1，128，6，20，25）
 
-        short_range4 = self.down_conv4(long_range4)
+        short_range4 = self.down_conv4(long_range4) #（1，256，6，20，25） torch.Size([1, 256, 6, 32, 32])
 
-        outputs = self.decoder_stage1(long_range4) + short_range4
+        outputs = self.decoder_stage1(long_range4) + short_range4   #（1，256，6，20，25） torch.Size([1, 256, 6, 32, 32])
         outputs = F.dropout(outputs, self.dorp_rate, self.training)
 
-        output1 = self.map1(outputs)
+        output1 = self.map1(outputs)    #torch.Size([1, 3, 48, 320, 400]) torch.Size([1, 3, 48, 512, 512])
 
-        short_range6 = self.up_conv2(outputs)
+        short_range6 = self.up_conv2(outputs)   #torch.Size([1, 128, 12, 40, 50]) torch.Size([1, 128, 12, 64, 64])
 
-        outputs = self.decoder_stage2(torch.cat([short_range6, long_range3], dim=1)) + short_range6
+        outputs = self.decoder_stage2(torch.cat([short_range6, long_range3], dim=1)) + short_range6 #torch.Size([1, 128, 12, 64, 64])
         outputs = F.dropout(outputs, self.dorp_rate, self.training)
 
         output2 = self.map2(outputs)
 
-        short_range7 = self.up_conv3(outputs)
+        short_range7 = self.up_conv3(outputs)   #torch.Size([1, 64, 24, 128, 128])
 
         outputs = self.decoder_stage3(torch.cat([short_range7, long_range2], dim=1)) + short_range7
         outputs = F.dropout(outputs, self.dorp_rate, self.training)

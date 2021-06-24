@@ -24,19 +24,30 @@ class Train_Dataset(dataset):
                 # RandomRotate()
             ])
 
+    def znorm(self, tensor: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        tensor = tensor.clone().float()
+        values = tensor.masked_select(torch.ones_like(mask, dtype=torch.bool))
+        mean, std = values.mean(), values.std()
+        if std == 0:
+            return None
+        tensor -= mean
+        tensor /= std
+        return tensor
+
     def __getitem__(self, index):
 
         ct = sitk.ReadImage(self.filename_list[index][0], sitk.sitkInt16)
         seg = sitk.ReadImage(self.filename_list[index][1], sitk.sitkUInt8)
 
         ct_array = sitk.GetArrayFromImage(ct)
+        ct_array = (ct_array-np.min(ct_array))/(np.max(ct_array)-np.min(ct_array))
         seg_array = sitk.GetArrayFromImage(seg)
 
-        ct_array = ct_array / self.args.norm_factor
+        # ct_array = ct_array / self.args.norm_factor
         ct_array = ct_array.astype(np.float32)
-
         ct_array = torch.FloatTensor(ct_array).unsqueeze(0)
         seg_array = torch.FloatTensor(seg_array).unsqueeze(0)
+        # ct_array = self.znorm(ct_array, seg_array)
 
         if self.transforms:
             ct_array,seg_array = self.transforms(ct_array, seg_array)     
