@@ -7,15 +7,18 @@ from torchvision.transforms import RandomCrop
 import numpy as np
 import SimpleITK as sitk
 import torch
+from scipy.ndimage.interpolation import zoom
 from torch.utils.data import Dataset as dataset
-from .transforms import RandomCrop, RandomFlip_LR, RandomFlip_UD, Center_Crop, Compose, Resize
+from .transforms import RandomCrop, RandomFlip_LR, RandomFlip_UD, Center_Crop, Compose, Resize,RandomRotate
 
 class Train_Dataset(dataset):
     def __init__(self, args):
 
         self.args = args
 
-        self.filename_list = self.load_file_name_list(os.path.join(args.dataset_path, 'train_path_list.txt'))
+        # self.filename_list = self.load_file_name_list(os.path.join(args.dataset_path, 'train_path_list.txt'))
+        train_data_path = '/media/margery/4ABB9B07DF30B9DB/pythonDemo/medical_image_segmentation/3D-RU-Net/Data/Train'
+        self.filename_list = [os.path.join(train_data_path, ID) for ID in os.listdir(train_data_path)]
 
         self.transforms = Compose([
                 RandomCrop(self.args.crop_size),
@@ -36,12 +39,18 @@ class Train_Dataset(dataset):
 
     def __getitem__(self, index):
 
-        ct = sitk.ReadImage(self.filename_list[index][0], sitk.sitkInt16)
-        seg = sitk.ReadImage(self.filename_list[index][1], sitk.sitkUInt8)
+        # ct = sitk.ReadImage(self.filename_list[index][0], sitk.sitkInt16)
+        # seg = sitk.ReadImage(self.filename_list[index][1], sitk.sitkUInt8)
+        ct = sitk.ReadImage(os.path.join(self.filename_list[index], 'HighRes', 'Image.nii'))
+        seg = sitk.ReadImage(os.path.join(self.filename_list[index], 'HighRes', 'Label.nii'), sitk.sitkUInt8)
 
         ct_array = sitk.GetArrayFromImage(ct)
-        ct_array = (ct_array-np.min(ct_array))/(np.max(ct_array)-np.min(ct_array))
+        # ct_array = (ct_array-np.min(ct_array))/(np.max(ct_array)-np.min(ct_array))
         seg_array = sitk.GetArrayFromImage(seg)
+
+        if ct_array.shape[1] != 256 or ct_array.shape[2] != 256:
+            ct_array = zoom(ct_array, (1, 256/ct_array.shape[1], 256/ct_array.shape[2]), order=3)
+            seg_array = zoom(seg_array, (1, 256 / seg_array.shape[1], 256 / seg_array.shape[2]), order=0)
 
         # ct_array = ct_array / self.args.norm_factor
         ct_array = ct_array.astype(np.float32)
@@ -66,6 +75,7 @@ class Train_Dataset(dataset):
                     break
                 file_name_list.append(lines.split())
         return file_name_list
+
 
 if __name__ == "__main__":
     sys.path.append('/ssd/lzq/3DUNet')

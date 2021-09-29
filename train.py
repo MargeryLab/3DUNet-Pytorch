@@ -45,9 +45,9 @@ def train(model, train_loader, optimizer, loss_func, n_labels, alpha,epoch,log):
         optimizer.zero_grad()
 
         output = model(data)
-        log.vis_image('raw', data.detach().cpu().numpy().swapaxes(0, 2)[:, 0, :, :, :], epoch)
-        log.vis_image('mask/true', target.cpu().numpy().swapaxes(0,2)[:,0,:,:,:], epoch)
-        log.vis_image('mask/pred', output[-1].detach().cpu().numpy().swapaxes(0, 2)[:, 0, :, :, :], epoch)
+        log.vis_image('raw', data.detach().cpu().numpy().swapaxes(0, 2)[:, :, 0, :, :], epoch)
+        log.vis_image('mask/true', target.cpu().numpy().swapaxes(0,2)[:,:,0,:,:], epoch)
+        log.vis_image('mask/pred', output[-1].detach().cpu().numpy().swapaxes(0, 2)[:, :, 0, :, :], epoch)
 
         loss0 = loss_func(output[0], target)
         loss1 = loss_func(output[1], target)
@@ -77,18 +77,19 @@ if __name__ == '__main__':
     val_loader = DataLoader(dataset=Val_Dataset(args),batch_size=1,num_workers=args.n_threads, shuffle=False)
 
     # model info
-    model = ResUNet(in_channel=1, out_channel=args.n_labels,training=True).to(device)
+    model = UNet(in_channel=1, out_channel=args.n_labels,training=True).to(device)
+    # model = ResUNet(in_channel=1, out_channel=args.n_labels, training=True).to(device)
 
     model.apply(weights_init.init_model)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=0.5, patience=3, verbose=True)
     common.print_network(model)
     model = torch.nn.DataParallel(model, device_ids=args.gpu_id)  # multi-GPU
-    ckpt = torch.load('{}/latest_model.pth'.format(save_path))
-    model.load_state_dict(ckpt['net'])
+    # ckpt = torch.load('{}/latest_model.pth'.format(save_path))
+    # model.load_state_dict(ckpt['net'])
  
-    # loss = loss.TverskyLoss()
-    loss = loss.DiceLoss()
+    loss = loss.TverskyLoss()
+    # loss = loss.DiceLoss()
     train_epoch_best_loss = 1000
 
     log = logger.Train_Logger(save_path,"train_log")
