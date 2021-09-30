@@ -28,8 +28,8 @@ def val(model, val_loader, loss_func, n_labels):
             
             val_loss.update(loss.item(),data.size(0))
             val_dice.update(output, target)
-    val_log = OrderedDict({'Val_Loss': val_loss.avg, 'Val_dice_tumor': val_dice.avg[1]})
-    if n_labels==3: val_log.update({'Val_dice_rectal': val_dice.avg[2]})
+    val_log = OrderedDict({'Val_Loss': val_loss.avg, 'Val_dice_tumor': val_dice.avg[0]})
+    if n_labels==3: val_log.update({'Val_dice_rectal': val_dice.avg[1]})
     return val_log
 
 def train(model, train_loader, optimizer, loss_func, n_labels, alpha,epoch,log):
@@ -38,8 +38,8 @@ def train(model, train_loader, optimizer, loss_func, n_labels, alpha,epoch,log):
     train_loss = metrics.LossAverage()
     train_dice = metrics.DiceAverage(n_labels)
 
-    for idx, (data, target) in tqdm(enumerate(train_loader),total=len(train_loader)):
-        data, target = data.float(), target.long()
+    for idx, (data, target_raw) in tqdm(enumerate(train_loader),total=len(train_loader)):
+        data, target = data.float(), target_raw.long()
         target = common.to_one_hot_3d(target, n_labels)#n_labels
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
@@ -47,22 +47,23 @@ def train(model, train_loader, optimizer, loss_func, n_labels, alpha,epoch,log):
         output = model(data)
         log.vis_image('raw', data.detach().cpu().numpy().swapaxes(0, 2)[:, :, 0, :, :], epoch)
         log.vis_image('mask/true', target.cpu().numpy().swapaxes(0,2)[:,:,0,:,:], epoch)
-        log.vis_image('mask/pred', output[-1].detach().cpu().numpy().swapaxes(0, 2)[:, :, 0, :, :], epoch)
+        log.vis_image('mask/pred', output.detach().cpu().numpy().swapaxes(0, 2)[:, :, 0, :, :], epoch)
 
-        loss0 = loss_func(output[0], target)
-        loss1 = loss_func(output[1], target)
-        loss2 = loss_func(output[2], target)
-        loss3 = loss_func(output[3], target)
+        # loss0 = loss_func(output[0], target)
+        # loss1 = loss_func(output[1], target)
+        # loss2 = loss_func(output[2], target)
+        # loss3 = loss_func(output[3], target)
 
-        loss = loss3  +  alpha * (loss0 + loss1 + loss2)
+        # loss = loss3  +  alpha * (loss0 + loss1 + loss2)
+        loss = loss_func(output, target)
         loss.backward()
         optimizer.step()
         
-        train_loss.update(loss3.item(),data.size(0))
-        train_dice.update(output[3], target)
+        train_loss.update(loss.item(),data.size(0))
+        train_dice.update(output, target_raw.to(device))
 
-    train_log = OrderedDict({'Train_Loss': train_loss.avg, 'Train_dice_tumor': train_dice.avg[1]})
-    if n_labels==3: train_log.update({'Train_dice_rectal': train_dice.avg[2]})
+    train_log = OrderedDict({'Train_Loss': train_loss.avg, 'Train_dice_tumor': train_dice.avg[0]})
+    if n_labels==3: train_log.update({'Train_dice_rectal': train_dice.avg[1]})
 
     return train_log
 
@@ -77,19 +78,19 @@ if __name__ == '__main__':
     val_loader = DataLoader(dataset=Val_Dataset(args),batch_size=1,num_workers=args.n_threads, shuffle=False)
 
     # model info
-    model = UNet(in_channel=1, out_channel=args.n_labels,training=True).to(device)
+    model = UNet(in_channel=1, out_channel=args.n_labels).to(device)
     # model = ResUNet(in_channel=1, out_channel=args.n_labels, training=True).to(device)
 
     model.apply(weights_init.init_model)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=0.5, patience=3, verbose=True)
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=0.5, patience=5, verbose=True)
     common.print_network(model)
     model = torch.nn.DataParallel(model, device_ids=args.gpu_id)  # multi-GPU
     # ckpt = torch.load('{}/latest_model.pth'.format(save_path))
     # model.load_state_dict(ckpt['net'])
  
     loss = loss.TverskyLoss()
-    # loss = loss.DiceLoss()
+    # loss = loss.HybridLoss()
     train_epoch_best_loss = 1000
 
     log = logger.Train_Logger(save_path,"train_log")
@@ -112,7 +113,7 @@ if __name__ == '__main__':
         state = {'net': model.state_dict(),'optimizer':optimizer.state_dict(),'epoch': epoch}
         torch.save(state, os.path.join(save_path, 'latest_model.pth'))
 
-        scheduler.step(val_log['Val_dice_tumor'])
+        # scheduler.step(val_log['Val_dice_tumor'])
         if val_log['Val_dice_tumor'] > best[1]:
             print('Saving best model')
             torch.save(state, os.path.join(save_path, 'best_model.pth'))

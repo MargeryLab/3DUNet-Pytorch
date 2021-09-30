@@ -24,14 +24,16 @@ parser.add_argument('--test_rate', type=float, default=0.1, help='')
 parser.add_argument('--dataset_path',default = 'dataset/fixed_data',help='fixed trainset root path')
 parser.add_argument('--test_data_path',default = 'dataset/test',help='Testset path')
 parser.add_argument('--save',default='UNet',help='save path of trained model')
-parser.add_argument('--batch_size', type=list, default=8,help='batch size of trainset')
+parser.add_argument('--batch_size', type=list, default=2,help='batch size of trainset')
 
 # train
 parser.add_argument('--epochs', type=int, default=200, metavar='N',help='number of epochs to train (default: 200)')
 parser.add_argument('--lr', type=float, default=0.0001, metavar='LR',help='learning rate (default: 0.001)')
 parser.add_argument('--early_stop', default=20, type=int, help='early stopping (default: 100)')
+# parser.add_argument('--crop_size', type=int, default=32)
+# parser.add_argument('--val_crop_max_size', type=int, default=96)
 parser.add_argument('--crop_size', type=int, default=32)
-parser.add_argument('--val_crop_max_size', type=int, default=96)
+parser.add_argument('--val_crop_max_size', type=int, default=32)
 
 # test
 parser.add_argument('--test_cut_size', type=int, default=32, help='size of sliding window')

@@ -1,83 +1,105 @@
+import numpy as np
+from collections import OrderedDict
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+# from torchsummary import summary
+
 
 class UNet(nn.Module):
-    def __init__(self, in_channel=1, out_channel=2, training=True):
+    def __init__(self, in_channel=1, out_channel=3, init_features=64):
+        """
+        Implementations based on the Unet3D paper: https://arxiv.org/abs/1606.06650
+        """
+
         super(UNet, self).__init__()
-        self.training = training
-        self.encoder1 = nn.Conv3d(in_channel, 32, 3, stride=1, padding=1)  # b, 16, 10, 10
-        self.encoder2=   nn.Conv3d(32, 64, 3, stride=1, padding=1)  # b, 8, 3, 3
-        self.encoder3=   nn.Conv3d(64, 128, 3, stride=1, padding=1)
-        self.encoder4=   nn.Conv3d(128, 256, 3, stride=1, padding=1)
-        # self.encoder5=   nn.Conv3d(256, 512, 3, stride=1, padding=1)
-        
-        # self.decoder1 = nn.Conv3d(512, 256, 3, stride=1,padding=1)  # b, 16, 5, 5
-        self.decoder2 =   nn.Conv3d(256, 128, 3, stride=1, padding=1)  # b, 8, 15, 1
-        self.decoder3 =   nn.Conv3d(128, 64, 3, stride=1, padding=1)  # b, 1, 28, 28
-        self.decoder4 =   nn.Conv3d(64, 32, 3, stride=1, padding=1)
-        self.decoder5 =   nn.Conv3d(32, out_channel, 3, stride=1, padding=1)
-        
-        self.map4 = nn.Sequential(
-            nn.Conv3d(3, out_channel, 1, 1),
-            # nn.Upsample(scale_factor=(2, 2, 2), mode='trilinear'),
-            nn.Softmax(dim =1)
-        )
 
-        # 128*128 尺度下的映射
-        self.map3 = nn.Sequential(
-            nn.Conv3d(64, out_channel, 1, 1),
-            nn.Upsample(scale_factor=(4, 4, 4), mode='trilinear'),
-            nn.Softmax(dim =1)
-        )
+        features = init_features
+        self.encoder1 = UNet._block(in_channel, features, name="enc1")
+        self.pool1 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.encoder2 = UNet._block(features, features * 2, name="enc2")
+        self.pool2 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.encoder3 = UNet._block(features * 2, features * 4, name="enc3")
+        self.pool3 = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.encoder4 = UNet._block(features * 4, features * 8, name="enc4")
+        self.pool4 = nn.MaxPool3d(kernel_size=2, stride=2)
 
-        # 64*64 尺度下的映射
-        self.map2 = nn.Sequential(
-            nn.Conv3d(128, out_channel, 1, 1),
-            nn.Upsample(scale_factor=(8, 8, 8), mode='trilinear'),
-            nn.Softmax(dim =1)
-        )
+        self.bottleneck = UNet._block(features * 8, features * 16, name="bottleneck")
 
-        # 32*32 尺度下的映射
-        self.map1 = nn.Sequential(
-            nn.Conv3d(256, out_channel, 1, 1),
-            nn.Upsample(scale_factor=(16, 16, 16), mode='trilinear'),
-            nn.Softmax(dim =1)
+        self.upconv4 = nn.ConvTranspose3d(
+            features * 16, features * 8, kernel_size=2, stride=2
+        )
+        self.decoder4 = UNet._block((features * 8) * 2 , features * 8, name="dec4")
+        self.upconv3 = nn.ConvTranspose3d(
+            features * 8, features * 4, kernel_size=2, stride=2
+        )
+        self.decoder3 = UNet._block((features * 4) * 2, features * 4, name="dec3")
+        self.upconv2 = nn.ConvTranspose3d(
+            features * 4, features * 2, kernel_size=2, stride=2
+        )
+        self.decoder2 = UNet._block((features * 2) * 2, features * 2, name="dec2")
+        self.upconv1 = nn.ConvTranspose3d(
+            features * 2, features, kernel_size=2, stride=2
+        )
+        self.decoder1 = UNet._block(features * 2, features, name="dec1")
+
+        self.conv = nn.Conv3d(
+            in_channels=features, out_channels=out_channel, kernel_size=1
         )
 
     def forward(self, x):
-        out = F.relu(F.max_pool3d(self.encoder1(x),2,2))#128
-        t1 = out
-        out = F.relu(F.max_pool3d(self.encoder2(out),2,2))#64
-        t2 = out
-        out = F.relu(F.max_pool3d(self.encoder3(out),2,2))#32
-        t3 = out
-        out = F.relu(F.max_pool3d(self.encoder4(out),2,2))#16
-        # t4 = out
-        # out = F.relu(F.max_pool3d(self.encoder5(out),2,2))
-        
-        # t2 = out
-        # out = F.relu(F.interpolate(self.decoder1(out),scale_factor=(2,2,2),mode ='trilinear'))
-        # print(out.shape,t4.shape)
-        # print('1............', out.shape)
-        output1 = self.map1(out)#32
-        out = F.relu(F.interpolate(self.decoder2(out),scale_factor=(2,2,2),mode ='trilinear'))#32
-        out = torch.add(out,t3)
-        # print('2', out.shape)
-        output2 = self.map2(out)
-        out = F.relu(F.interpolate(self.decoder3(out),scale_factor=(2,2,2),mode ='trilinear'))#64
-        out = torch.add(out,t2)
-        # print('3', out.shape)
-        output3 = self.map3(out)
-        out = F.relu(F.interpolate(self.decoder4(out),scale_factor=(2,2,2),mode ='trilinear'))#128
-        out = torch.add(out,t1)
-        
-        out = F.relu(F.interpolate(self.decoder5(out),scale_factor=(2,2,2),mode ='trilinear'))#256
-        # print('4', out.shape)
-        output4 = self.map4(out)
-        # print(out.shape)
-        # print(output1.shape,output2.shape,output3.shape,output4.shape)
-        if self.training is True:
-            return output1, output2, output3, output4
-        else:
-            return output4
+        enc1 = self.encoder1(x)
+        enc2 = self.encoder2(self.pool1(enc1))
+        enc3 = self.encoder3(self.pool2(enc2))
+        enc4 = self.encoder4(self.pool3(enc3))
+
+        bottleneck = self.bottleneck(self.pool4(enc4))
+
+        dec4 = self.upconv4(bottleneck)
+        dec4 = torch.cat((dec4, enc4), dim=1)
+        dec4 = self.decoder4(dec4)
+        dec3 = self.upconv3(dec4)
+        dec3 = torch.cat((dec3, enc3), dim=1)
+        dec3 = self.decoder3(dec3)
+        dec2 = self.upconv2(dec3)
+        dec2 = torch.cat((dec2, enc2), dim=1)
+        dec2 = self.decoder2(dec2)
+        dec1 = self.upconv1(dec2)
+        dec1 = torch.cat((dec1, enc1), dim=1)
+        dec1 = self.decoder1(dec1)
+        outputs = self.conv(dec1)
+        return outputs
+
+    @staticmethod
+    def _block(in_channels, features, name):
+        return nn.Sequential(
+            OrderedDict(
+                [
+                    (
+                        name + "conv1",
+                        nn.Conv3d(
+                            in_channels=in_channels,
+                            out_channels=features,
+                            kernel_size=3,
+                            padding=1,
+                            bias=True,
+                        ),
+                    ),
+                    (name + "norm1", nn.BatchNorm3d(num_features=features)),
+                    (name + "relu1", nn.ReLU(inplace=True)),
+                    (
+                        name + "conv2",
+                        nn.Conv3d(
+                            in_channels=features,
+                            out_channels=features,
+                            kernel_size=3,
+                            padding=1,
+                            bias=True,
+                        ),
+                    ),
+                    (name + "norm2", nn.BatchNorm3d(num_features=features)),
+                    (name + "relu2", nn.ReLU(inplace=True)),
+                ]
+            )
+        )
+
+

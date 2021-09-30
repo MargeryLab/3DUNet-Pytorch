@@ -17,7 +17,7 @@ class Train_Dataset(dataset):
         self.args = args
 
         # self.filename_list = self.load_file_name_list(os.path.join(args.dataset_path, 'train_path_list.txt'))
-        train_data_path = '/media/margery/4ABB9B07DF30B9DB/pythonDemo/medical_image_segmentation/3D-RU-Net/Data/Train'
+        train_data_path = '/media/margery/4ABB9B07DF30B9DB/pythonDemo/medical_image_segmentation/3D-RU-Net/Data_256/Train'
         self.filename_list = [os.path.join(train_data_path, ID) for ID in os.listdir(train_data_path)]
 
         self.transforms = Compose([

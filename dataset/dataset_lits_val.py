@@ -14,7 +14,7 @@ class Val_Dataset(dataset):
 
         self.args = args
         # self.filename_list = self.load_file_name_list(os.path.join(args.dataset_path, 'val_path_list.txt'))
-        val_data_path = '/media/margery/4ABB9B07DF30B9DB/pythonDemo/medical_image_segmentation/3D-RU-Net/Data/Valid'
+        val_data_path = '/media/margery/4ABB9B07DF30B9DB/pythonDemo/medical_image_segmentation/3D-RU-Net/Data_256/Valid'
         self.filename_list = [os.path.join(val_data_path, ID) for ID in os.listdir(val_data_path)]
 
         self.transforms = Compose([Center_Crop(base=16, max_size=args.val_crop_max_size)]) 

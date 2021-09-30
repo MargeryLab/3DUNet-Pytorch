@@ -12,11 +12,8 @@ import SimpleITK as sitk
 class Img_DataSet(Dataset):
     def __init__(self, data_path, label_path, args):
         self.n_labels = args.n_labels
-        self.cut_size = args.test_cut_size  #48
-        self.cut_stride = args.test_cut_stride  #24
 
-        # 读取一个data文件并归一化 、resize
-        self.ct = sitk.ReadImage(data_path,sitk.sitkInt16)
+        self.ct = sitk.ReadImage(data_path)
         self.data_np = sitk.GetArrayFromImage(self.ct)  #(95,256,256)
         self.ori_shape = self.data_np.shape
 
@@ -136,9 +133,11 @@ def load_file_name_list(file_path):
     return file_name_list
 
 def Test_Datasets(args):
-    filename_list = load_file_name_list(os.path.join(args.dataset_path, 'test_path_list.txt'))
+    test_data_path = '/media/margery/4ABB9B07DF30B9DB/pythonDemo/medical_image_segmentation/3D-RU-Net/Data_256/Test'
+    filename_list = [os.path.join(test_data_path, ID) for ID in os.listdir(test_data_path)]
 
     print("The number of test samples is: ", len(filename_list))
     for file in filename_list:
         print("\nStart Evaluate: ", file[0])
-        yield Img_DataSet(file[0], file[1],args=args), file[0].split('/')[-1]
+        yield Img_DataSet(os.path.join(test_data_path,file, 'HighRes', 'Image.nii'),
+                          os.path.join(test_data_path,file, 'HighRes', 'Label.nii'),args=args), file

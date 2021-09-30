@@ -7,7 +7,7 @@ from dataset.dataset_lits_test import Test_Datasets,to_one_hot_3d
 import SimpleITK as sitk
 import os
 import numpy as np
-from models import ResUNet
+from models import ResUNet, UNet
 from utils.metrics import DiceAverage
 from collections import OrderedDict
 from dataset.dataset_lits_val import Val_Dataset
@@ -49,6 +49,7 @@ if __name__ == '__main__':
     device = torch.device('cpu' if args.cpu else 'cuda')
     # model info
     model = ResUNet(in_channel=1, out_channel=args.n_labels,training=False).to(device)
+    # model = UNet(in_channel=1, out_channel=args.n_labels, training=False).to(device)
     model = torch.nn.DataParallel(model, device_ids=args.gpu_id)  # multi-GPU
     ckpt = torch.load('{}/best_model.pth'.format(save_path))
     model.load_state_dict(ckpt['net'])
